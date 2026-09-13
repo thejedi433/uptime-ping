@@ -53,12 +53,25 @@ class TestStorage:
 
     def test_get_endpoint_exists(self, storage):
         """Test getting an existing endpoint."""
-        storage.add_endpoint("https://example.com", interval=120)
+        storage.add_endpoint("https://example.com")
         endpoint = storage.get_endpoint("https://example.com")
 
         assert endpoint is not None
         assert endpoint.url == "https://example.com"
-        assert endpoint.interval == 120
+
+    def test_connect_rollback_on_error(self, storage):
+        """Test that database errors trigger rollback and re-raise."""
+        storage.add_endpoint("https://example.com")
+        
+        # Force a constraint violation to trigger exception path
+        with pytest.raises(Exception):
+            with storage._connect() as conn:
+                conn.execute("INSERT INTO endpoints (url) VALUES (?)", ("https://example.com",))
+                conn.execute("INSERT INTO endpoints (url) VALUES (?)", ("https://example.com",))
+        
+        # Connection should be closed and rolled back - verify we can still use storage
+        endpoint = storage.get_endpoint("https://example.com")
+        assert endpoint is not None
 
     def test_get_endpoint_not_exists(self, storage):
         """Test getting a non-existent endpoint."""

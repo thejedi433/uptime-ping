@@ -1,6 +1,7 @@
 """SQLite storage for endpoint state and check history."""
 
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -60,9 +61,18 @@ class Storage:
                 );
             """)
 
-    def _connect(self) -> sqlite3.Connection:
-        """Get database connection."""
-        return sqlite3.connect(self.db_path)
+    @contextmanager
+    def _connect(self):
+        """Get database connection (auto-closes on exit)."""
+        conn = sqlite3.connect(self.db_path)
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def add_endpoint(self, url: str, interval: int = 300) -> Endpoint:
         """Add a new endpoint to monitor."""
